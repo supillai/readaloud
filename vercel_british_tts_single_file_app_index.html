@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>British English Reader</title>
+  <meta name="description" content="Type words or paste text and hear it read aloud with a British English voice." />
+  <style>
+    :root{--bg:#0b1020;--card:#121836;--muted:#a7b0d6;--accent:#7aa2f7;--accent2:#9ece6a;--danger:#f7768e;--text:#e6eaf6}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(1200px 800px at 80% -20%,#1b255a10,transparent),radial-gradient(900px 600px at -20% 10%,#7aa2f710,transparent),var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial}
+    .wrap{max-width:960px;margin:40px auto;padding:0 20px}
+    .card{background:linear-gradient(180deg,#1b2242 0,#0e1430 100%);border:1px solid #ffffff14;border-radius:24px;box-shadow:0 10px 30px #0006;overflow:hidden}
+    header{padding:18px 22px;border-bottom:1px solid #ffffff10;display:flex;gap:12px;align-items:center;justify-content:space-between}
+    header h1{font-size:18px;margin:0;letter-spacing:.3px}
+    header .badge{font-size:12px;color:#cdd6f4;background:#ffffff12;padding:6px 10px;border-radius:999px}
+    .content{padding:22px}
+    textarea{width:100%;min-height:220px;resize:vertical;border-radius:16px;border:1px solid #ffffff20;background:#0a1130;color:var(--text);padding:14px 16px;outline:none}
+    textarea:focus{border-color:#7aa2f7aa;box-shadow:0 0 0 3px #7aa2f733}
+    .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:16px}
+    .control{background:#0a1130;border:1px solid #ffffff20;border-radius:14px;padding:12px}
+    .control label{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
+    .control input[type="range"]{width:100%}
+    select{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #ffffff20;background:#0a1130;color:var(--text)}
+    .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+    button{appearance:none;border:1px solid #ffffff22;background:#1b2242;color:var(--text);padding:10px 14px;border-radius:12px;cursor:pointer}
+    button:hover{border-color:#7aa2f7aa}
+    .primary{background:linear-gradient(90deg,var(--accent),#89ddff);border:none;color:#0b1020;font-weight:600}
+    .danger{background:linear-gradient(90deg,#ff9aa2,var(--danger));border:none;color:#111}
+    footer{padding:12px 22px;color:var(--muted);font-size:12px;border-top:1px solid #ffffff10;display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
+    .note{opacity:.8}
+    .pill{border:1px solid #ffffff24;border-radius:999px;padding:4px 10px}
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <header>
+        <h1>British English Reader</h1>
+        <span class="badge">Web Speech API</span>
+      </header>
+      <div class="content">
+        <textarea id="text" placeholder="Type words or paste sentences here…"></textarea>
+
+        <div class="row">
+          <div class="control">
+            <label for="voice">Voice (prefer en-GB)</label>
+            <select id="voice"></select>
+          </div>
+          <div class="control">
+            <label for="rate">Rate: <span id="rateVal">1.0</span></label>
+            <input id="rate" type="range" min="0.5" max="2" step="0.1" value="1" />
+          </div>
+          <div class="control">
+            <label for="pitch">Pitch: <span id="pitchVal">1.0</span></label>
+            <input id="pitch" type="range" min="0" max="2" step="0.1" value="1" />
+          </div>
+          <div class="control">
+            <label for="volume">Volume: <span id="volumeVal">1.0</span></label>
+            <input id="volume" type="range" min="0" max="1" step="0.05" value="1" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="primary" id="speak">▶︎ Speak</button>
+          <button id="pause">⏸︎ Pause</button>
+          <button id="resume">⏵ Resume</button>
+          <button class="danger" id="stop">■ Stop</button>
+          <button id="clear">⌫ Clear</button>
+        </div>
+
+        <p class="note" id="support"></p>
+      </div>
+      <footer>
+        <span class="pill">Tip: Press Ctrl/Cmd + Enter to speak</span>
+        <span class="note">Voices come from your device/browser. Set a British voice in the dropdown.</span>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const text = document.getElementById('text');
+      const voiceSel = document.getElementById('voice');
+      const rate = document.getElementById('rate');
+      const pitch = document.getElementById('pitch');
+      const volume = document.getElementById('volume');
+      const rateVal = document.getElementById('rateVal');
+      const pitchVal = document.getElementById('pitchVal');
+      const volumeVal = document.getElementById('volumeVal');
+      const support = document.getElementById('support');
+
+      // Persist text between visits
+      try { text.value = localStorage.getItem('british-tts-text') || ''; } catch {}
+      text.addEventListener('input', () => {
+        try { localStorage.setItem('british-tts-text', text.value); } catch {}
+      });
+
+      rate.addEventListener('input', () => rateVal.textContent = Number(rate.value).toFixed(1));
+      pitch.addEventListener('input', () => pitchVal.textContent = Number(pitch.value).toFixed(1));
+      volume.addEventListener('input', () => volumeVal.textContent = Number(volume.value).toFixed(2));
+
+      const synthOK = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+      if (!synthOK) {
+        support.textContent = 'Your browser does not support speech synthesis. Try the latest Chrome, Edge, or Safari.';
+        return;
+      } else {
+        support.textContent = '';
+      }
+
+      let voices = [];
+      function populateVoices(){
+        voices = window.speechSynthesis.getVoices();
+        voiceSel.innerHTML = '';
+        const preferred = [];
+        const others = [];
+        voices.forEach((v, i) => {
+          const opt = document.createElement('option');
+          opt.value = String(i);
+          opt.textContent = `${v.name} — ${v.lang}${v.default ? ' (default)' : ''}`;
+          if (/^en-GB/i.test(v.lang) || /United Kingdom/i.test(v.name)) {
+            preferred.push(opt);
+          } else {
+            others.push(opt);
+          }
+        });
+        const addGroup = (label, list) => {
+          if (list.length){
+            const g = document.createElement('optgroup');
+            g.label = label;
+            list.forEach(o => g.appendChild(o));
+            voiceSel.appendChild(g);
+          }
+        };
+        addGroup('British English', preferred);
+        addGroup('Other voices', others);
+
+        // Select first en-GB if available
+        const enGbOption = preferred[0] || voiceSel.querySelector('option');
+        if (enGbOption) enGbOption.selected = true;
+      }
+
+      populateVoices();
+      window.speechSynthesis.onvoiceschanged = populateVoices;
+
+      let currentUtterance = null;
+
+      function speak(){
+        const t = text.value.trim();
+        if (!t) { text.focus(); return; }
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(t);
+        const idx = Number(voiceSel.value);
+        if (!Number.isNaN(idx) && voices[idx]) u.voice = voices[idx];
+        u.rate = Number(rate.value);
+        u.pitch = Number(pitch.value);
+        u.volume = Number(volume.value);
+        u.onerror = (e) => console.error('Speech error', e);
+        currentUtterance = u;
+        window.speechSynthesis.speak(u);
+      }
+
+      function pause(){ if (speechSynthesis.speaking && !speechSynthesis.paused) speechSynthesis.pause(); }
+      function resume(){ if (speechSynthesis.paused) speechSynthesis.resume(); }
+      function stop(){ speechSynthesis.cancel(); }
+
+      document.getElementById('speak').addEventListener('click', speak);
+      document.getElementById('pause').addEventListener('click', pause);
+      document.getElementById('resume').addEventListener('click', resume);
+      document.getElementById('stop').addEventListener('click', stop);
+      document.getElementById('clear').addEventListener('click', () => { text.value=''; text.focus(); try{localStorage.removeItem('british-tts-text')}catch{} });
+
+      // Keyboard: Ctrl/Cmd+Enter to speak
+      text.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); speak(); }
+      });
+    })();
+  </script>
+</body>
+</html>
